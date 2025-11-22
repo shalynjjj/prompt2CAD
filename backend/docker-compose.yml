@@ -1,0 +1,11 @@
+services:
+  prompt2cad-backend:
+    build: .
+    container_name: prompt2cad-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app/static:/app/static
+      - ./chat_history.db:/app/chat_history.db
+      - ./.env:/app/.env
