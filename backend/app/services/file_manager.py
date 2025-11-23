@@ -16,6 +16,7 @@ class FileManagerService:
 
         self.dirs = {
             "upload": self.base_dir / "uploads",
+            "processed": self.base_dir / "processed",
             "images": self.base_dir / "images",
             "stl": self.base_dir / "stls",
             "codes": self.base_dir / "codes"

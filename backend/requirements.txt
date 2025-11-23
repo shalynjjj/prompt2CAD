@@ -3,10 +3,6 @@ fastapi==0.115.0
 uvicorn==0.30.3
 python-multipart ==0.0.9  # For handling file uploads
 
-# --- Database ---
-# sqlmodel==0.0.22
-# psycopg2-binary==2.9.9      # PostgreSQL driver (for cloud)
-# sqlalchemy==2.0.32           # ORM backend
 
 # --- AI Model Integration ---
 openai>=1.56.0 
@@ -18,12 +14,6 @@ xvfbwrapper==0.2.9  # For headless rendering of 3D models
 # --- Utils ---
 python-dotenv==1.0.1 # For environment variable management
 requests==2.32.3      # For making HTTP requests
+httpx
+pillow
 
-# --- Optional Enhancements ---
-# redis==5.0.7                 # For caching/memory (optional)
-# pydantic==2.8.2              # For data validation (used in FastAPI)
-# aiofiles==24.1.0             # For async file handling
-# python-multipart==0.0.9      # To handle file uploads
-
-# --- Testing ---
-#pytest==8.3.2
