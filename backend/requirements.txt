@@ -2,6 +2,7 @@
 fastapi==0.115.0
 uvicorn==0.30.3
 python-multipart ==0.0.9  # For handling file uploads
+httpx==0.24.1  # For making async HTTP requests
 
 
 # --- AI Model Integration ---
@@ -16,4 +17,8 @@ python-dotenv==1.0.1 # For environment variable management
 requests==2.32.3      # For making HTTP requests
 httpx
 pillow
+numpy==1.26.4
+numpy-stl>=3.0.0
+scipy==1.11.4
+matplotlib==3.7.1
 

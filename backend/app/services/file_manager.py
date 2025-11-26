@@ -1,80 +1,120 @@
-import uuid
-import time
-import shutil
 import os
-from pathlib import Path
-from fastapi import UploadFile
-from app.core.config import settings
+import base64
+from PIL import Image
+import io
+from app.core.database import Database
 
 
-
-class FileManagerService:
-
+class FileManager:
+    """Manages file operations with session_id based naming."""
+    
     def __init__(self):
-        # In docker, Working directory is /app, so static files are in /app/static
-        self.base_dir = Path("static")
-
-        self.dirs = {
-            "upload": self.base_dir / "uploads",
-            "processed": self.base_dir / "processed",
-            "images": self.base_dir / "images",
-            "stl": self.base_dir / "stls",
-            "codes": self.base_dir / "codes"
-        }
-        for dir_path in self.dirs.values():
-            dir_path.mkdir(parents=True, exist_ok=True)
+        self.base_dir = "static"
+        self.upload_dir = os.path.join(self.base_dir, "uploads")
+        self.processed_dir = os.path.join(self.base_dir, "processed")
+        self.stl_dir = os.path.join(self.base_dir, "stl")
+        self.render_dir = os.path.join(self.base_dir, "renders")
+        
+        self.db = Database()
+        self._ensure_directories()
     
-    # TODO
-    def _generate_filename(self, session_id: str, extension: str, prefix: str = "gen") -> str:
-        timestamp = int(time.time())
-        unique_suffix = str(uuid.uuid4())[:4]
-
-        # eg. session123_user_1701301234_abcd.png
-        return f"{session_id}_{prefix}_{timestamp}_{unique_suffix}.{extension}"   
-
-    async def save_upload_file(self, file: UploadFile, session_id: str) -> str:
-        if not file:
-            return None
-        
-        ext = file.filename.split(".")[-1] if "." in file.filename else "png"
-        filename = self._generate_filename(session_id, ext, prefix="user")
-        file_path = self.dirs["upload"] / filename
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+    def _ensure_directories(self):
+        """Create necessary directories."""
+        for directory in [self.upload_dir, self.processed_dir, self.stl_dir, self.render_dir]:
+            os.makedirs(directory, exist_ok=True)
+    
+    def save_uploaded_image(self, session_id: str, file_content: bytes) -> dict:
+        """Save uploaded image as {session_id}_original.png"""
+        try:
+            image = Image.open(io.BytesIO(file_content))
+            filename = f"{session_id}_original.png"
+            file_path = os.path.join(self.upload_dir, filename)
             
-        # return the url path to the file
-        return f"/static/uploads/{filename}"
+            image.convert('RGBA').save(file_path, 'PNG')
+            url_path = f"/static/uploads/{filename}"
+            
+            # Save to database
+            self.db.save_file(session_id, "original", file_path, url_path)
+            
+            return {"file_path": file_path, "url_path": url_path}
+        except Exception as e:
+            raise ValueError(f"Failed to save image: {str(e)}")
     
-    async def save_generated_code(self,code:str,session_id:str) -> str:
-        filename=self._generate_filename(session_id,"scad")
-        file_path=self.dirs["codes"]/filename
+    def save_2d_silhouette(self, session_id: str, image_b64: str, version: str = "v1") -> dict:
+        """Save 2D silhouette as {session_id}_2d_{version}.png"""
+        try:
+            print(f"Saving 2D silhouette for session: {session_id}, version: {version}")
+            image_bytes = base64.b64decode(image_b64)
 
-        with open(file_path,"w",encoding="utf-8") as f:
-            f.write(code)
-        
-        return {
-            # absolute path for rendering service
-            # url for frontend access
-            "absolute_path":str(file_path.absolute()),
-            "url":f"/static/codes/{filename}"
-        }
+            print(f"Decoded image bytes length: {len(image_bytes)}")
+            filename = f"{session_id}_2d_{version}.png"
+
+            print(f"Generated filename: {filename}")
+            file_path = os.path.join(self.processed_dir, filename)
+            
+
+            with open(file_path, "wb") as f:
+                f.write(image_bytes)
+            
+            print(f"Saved silhouette to path: {file_path}")
+            url_path = f"/static/processed/{filename}"
+            
+            # Save to database
+            self.db.save_file(session_id, f"2d_{version}", file_path, url_path)
+            
+            print(f"Saved file info to database for session: {session_id}, type: 2d_{version}")
+            return {"file_path": file_path, "url_path": url_path}
+        except Exception as e:
+            raise ValueError(f"Failed to save 2D silhouette: {str(e)}")
     
-    def get_generated_file_paths(self, session_id: str):
-        """预生成输出文件的路径"""
-        base_name = self._generate_filename(session_id, "").replace(".", "")
-        png_name = f"{base_name}.png"
-        stl_name = f"{base_name}.stl"
-        
-        return {
-            "png_absolute": str((self.dirs["images"] / png_name).absolute()),
-            "stl_absolute": str((self.dirs["stl"] / stl_name).absolute()),
-            "png_url": f"/static/images/{png_name}",
-            "stl_url": f"/static/stls/{stl_name}"
-        }
+    def save_stl_file(self, session_id: str, stl_bytes: bytes) -> dict:
+        """Save STL file as {session_id}_3d.stl"""
+        try:
+            filename = f"{session_id}_3d.stl"
+            file_path = os.path.join(self.stl_dir, filename)
+            
+            with open(file_path, "wb") as f:
+                f.write(stl_bytes)
+            
+            url_path = f"/static/stl/{filename}"
+            
+            # Save to database
+            self.db.save_file(session_id, "stl", file_path, url_path)
+            
+            return {"file_path": file_path, "url_path": url_path}
+        except Exception as e:
+            raise ValueError(f"Failed to save STL: {str(e)}")
     
+    def save_3d_render(self, session_id: str, render_b64: str) -> dict:
+        """Save 3D render as {session_id}_render.png"""
+        try:
+            image_bytes = base64.b64decode(render_b64)
+            filename = f"{session_id}_render.png"
+            file_path = os.path.join(self.render_dir, filename)
+            
+            with open(file_path, "wb") as f:
+                f.write(image_bytes)
+            
+            url_path = f"/static/renders/{filename}"
+            
+            # Save to database
+            self.db.save_file(session_id, "render", file_path, url_path)
+            
+            return {"file_path": file_path, "url_path": url_path}
+        except Exception as e:
+            raise ValueError(f"Failed to save render: {str(e)}")
     
+    def get_file_path(self, session_id: str, file_type: str) -> str:
+        """Get file path from database."""
+        file_info = self.db.get_file(session_id, file_type)
+        if not file_info:
+            raise FileNotFoundError(f"File not found: {session_id}/{file_type}")
+        return file_info["file_path"]
     
+    def encode_image_to_base64(self, file_path: str) -> str:
+        """Encode image to base64."""
+        with open(file_path, "rb") as f:
+            return base64.b64encode(f.read()).decode('utf-8')
         
 
-file_manager = FileManagerService()
+FileManager = FileManager()

@@ -2,14 +2,14 @@ import subprocess
 import os
 import shutil
 from app.core.config import settings
-from app.services.file_manager import file_manager
+from app.services.file_manager import FileManager
 
 
 class RenderService:
 
     def render(self,scad_path: str, session_id:str):
         
-        paths=file_manager.get_generated_file_paths(session_id)
+        paths=FileManager.get_generated_file_paths(session_id)
 
         abs_scad=os.path.abspath(scad_path)
         abs_png=paths['png_absolute']

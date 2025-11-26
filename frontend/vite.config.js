@@ -5,7 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // 允许通过 IP 访问（方便局域网测试）
-    port: 5173, // 指定端口
+    port: 5173, // 前端运行端口
+    proxy: {
+      // 代理配置：将 /api 开头的请求转发到本地后端
+      '/api': {
+        target: 'http://127.0.0.1:8000', // 你的 FastAPI 本地运行地址
+        changeOrigin: true,
+        secure: false,
+      }
+    }
   }
 })

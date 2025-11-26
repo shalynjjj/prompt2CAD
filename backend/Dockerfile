@@ -8,11 +8,6 @@ ENV PYTHONUNBUFFERED=1
 # apt-get: install dependencies
 # install -y openscad
 # rm -rf: clean up apt cache to reduce image size
-RUN apt-get update && apt-get install -y \
-    openscad \
-    xvfb \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY requirements.txt .
