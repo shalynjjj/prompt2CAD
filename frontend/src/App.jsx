@@ -17,7 +17,7 @@ function App() {
   const [editPrompt, setEditPrompt] = useState('');
   const [editVersion, setEditVersion] = useState(2);
   const [result3D, setResult3D] = useState({ stlUrl: null, previewUrl: null });
-
+  const [depthDivWidth, setDepthDivWidth] = useState(1.0);
   // --- 辅助函数 ---
   const urlToBlob = async (url) => {
     const response = await fetch(url);
@@ -134,6 +134,7 @@ function App() {
 
     const formData = new FormData();
     formData.append('session_id', sessionId);
+    formData.append('depth_div_width', depthDivWidth); // 添加 depth_div_width 参数
     if (editPrompt) {
       formData.append('prompt', editPrompt); 
     }
@@ -218,10 +219,34 @@ function App() {
         )}
 
         {/* Error Message */}
-        {error && (
+        {/* {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center">
             <AlertCircle className="w-5 h-5 mr-2" />
             {error}
+          </div>
+        )} */}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center">
+            <AlertCircle className="w-5 h-5 mr-2" />
+            {/* ✅ 添加类型检查 */}
+            <div className="flex-1">
+              {typeof error === 'string' ? (
+                <p>{error}</p>
+              ) : Array.isArray(error) ? (
+                <ul className="list-disc pl-4">
+                  {error.map((err, index) => (
+                    <li key={index}>
+                      {err.loc?.join(' → ')}: {err.msg}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <pre className="text-xs overflow-auto">
+                  {JSON.stringify(error, null, 2)}
+                </pre>
+              )}
+            </div>
           </div>
         )}
 
@@ -305,6 +330,25 @@ function App() {
                   Edit
                 </button>
               </div>
+                          {/* ✅ 添加深度输入框 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  3D Depth (mm)
+                </label>
+                <input
+                  type="number"
+                  min="0.5"
+                  max="20"
+                  step="0.5"
+                  value={depthDivWidth}
+                  onChange={(e) => setDepthDivWidth(parseFloat(e.target.value) || 3.0)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter depth in mm (e.g., 3.0)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Recommended: 2-5mm. Higher values create thicker keychains.
+                </p>
+            </div>
 
               <button 
                 onClick={handleGenerate3D}
@@ -314,6 +358,9 @@ function App() {
                 Looks Good! Generate 3D Model
               </button>
             </div>
+
+
+
           </div>
         )}
 

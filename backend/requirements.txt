@@ -1,24 +1,19 @@
 # --- Web Framework ---
 fastapi==0.115.0
 uvicorn==0.30.3
-python-multipart ==0.0.9  # For handling file uploads
-httpx==0.24.1  # For making async HTTP requests
-
+python-multipart==0.0.9
+httpx==0.24.1
 
 # --- AI Model Integration ---
 openai>=1.56.0 
-xvfbwrapper==0.2.9  # For headless rendering of 3D models
-
-
-
+xvfbwrapper==0.2.9
 
 # --- Utils ---
-python-dotenv==1.0.1 # For environment variable management
-requests==2.32.3      # For making HTTP requests
-httpx
+python-dotenv==1.0.1
+requests==2.32.3
 pillow
+opencv-python
 numpy==1.26.4
 numpy-stl>=3.0.0
 scipy==1.11.4
 matplotlib==3.7.1
-

@@ -65,11 +65,11 @@ async def edit_endpoint(
     
 
 @router.post('/generate3D', response_model=Generate3DResponse, summary="generate 3d model based on 2d sketch and user instructions", description="generate 3d model(stl and render) based on previously generated 2d sketch and user instructions")
-async def generate3D_endpoint(session_id: str=Form(..., description="session id"), prompt: Optional[str]=Form(None, description="additional instructions for 3D generation, e.g., 'make it thicker'")):
+async def generate3D_endpoint(session_id: str=Form(..., description="session id"), depth_div_width: float=Form(..., description="depth divided by width ratio"), aspect_ratio: float=Form(1.0, description="aspect ratio")):
     """
     generate 3D model based on 2D sketch and user instructions
     """
-    result=await workflow.generate_3d_model(session_id=session_id, prompt=prompt)
+    result=await workflow.generate_3d_model(session_id=session_id, depth_div_width=depth_div_width, aspect_ratio=aspect_ratio)
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error or "Failed to generate 3D model.")
     return result

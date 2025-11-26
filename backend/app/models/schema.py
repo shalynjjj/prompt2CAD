@@ -40,7 +40,8 @@ class Edit2DRequest(BaseModel):
 class Generate3DRequest(BaseModel):
     session_id: str =Field(..., description="session id")
     prompt: Optional[str]=Field(None, description="additional instructions for 3D generation, e.g., 'make it thicker'")
-
+    depth_div_width: Optional[float] = Field(None, description="depth to width ratio for 3D model scaling")
+    aspect_ratio: Optional[float] = Field(1.0, description="aspect ratio for 3D model scaling, default is 1.0")
     class Config:
         schema_extra = {
             "example": {
@@ -115,7 +116,7 @@ class Generate3DResponse(BaseModel):
     """生成3D模型的响应"""
     success: bool
     session_id: str
-    data: Optional[Dict[str, Any]] = Field(None, description="包含 stl_file, render_preview, proportions")
+    data: Optional[Dict[str, Any]] = Field(None, description="包含 stl_file, render_preview")
     message: Optional[str] = None
     error: Optional[str] = None
     

@@ -1,7 +1,13 @@
+import io
 import uuid
 import time
 import threading
 from fastapi import UploadFile
+import glob
+import cv2
+import numpy as np
+import os
+from stl import mesh
 from app.models.schema import AppResponse, Aritifacts, Edit2DResponse, Generate3DResponse
 
 from app.services.file_manager import FileManager
@@ -103,7 +109,7 @@ class WorkflowService:
 
             edited_b64 = self.image_service.edit_silhouette(
             image_path=image_path,      # ← 使用用户上传的图片（含红色标记）
-            instructions=prompt          # ← 使用用户的文字描述
+            instructions=prompt          # user requirements 
             )
             new_version = f"v{version}"
             edited_info = self.file_manager.save_2d_silhouette(
@@ -111,7 +117,7 @@ class WorkflowService:
                 image_b64=edited_b64,
                 version=new_version
             )
-            print(f"Edited silhouette saved: {edited_info}")  # ← 新增：日志
+            print(f"Edited silhouette saved: {edited_info}")  # log 
         
             return Edit2DResponse(
                 success=True,
@@ -132,49 +138,133 @@ class WorkflowService:
         finally:
             self._release_lock(session_id)
 
-    async def generate_3d_model(self, session_id: str, prompt: str) -> Generate3DResponse:
+    async def generate_3d_model(self, session_id: str,depth_div_width: float, aspect_ratio: float) -> Generate3DResponse:
         self._acquire_lock(session_id)
+        """
+        session_id: find 2d silhouette and analysis data by session_id
+        """
         try:
-            silhouette_path=None
-            for v in range(10,0,-1):
-                try:
-                    silhouette_path=self.file_manager.get_file_path(
-                        session_id=session_id,
-                        file_type=f"2d_v{v}")
-                    break
-                except FileNotFoundError:
-                    continue
-            if not silhouette_path:
-                return AppResponse(
-                    success=False,
-                    session_id=session_id,
-                    error="No 2D silhouette found for 3D generation."
-                )
+            files=glob.glob(f"static/processed/{session_id}_2d_*.png")
+            latest_silhouette_path=max(files, key=os.path.getctime)
+            with open(latest_silhouette_path, "rb") as f:
+                image_path=f.read()
+            aspect_ratio=1.0
+            nparr = np.frombuffer(image_path, np.uint8)
+            im = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        
+            if im is None:
+                raise ValueError(f"Failed to read image from {image_path}")
             
-            analysis=self.file_manager.db.get_analysis(session_id=session_id)
-            if not analysis:
-                return AppResponse(
-                    success=False,
-                    session_id=session_id,
-                    error="No analysis data found for 3D generation."
-                )
+            # Process image array
+            im_array = np.array(im)
+            im_array = 255 - im_array
+            im_array = np.rot90(im_array, -1, (0, 1))
             
-            stl_bytes=self.model_3d_service.generate_stl_from_2d(silhouette_path=silhouette_path,proportions=analysis)
-            stl_info=self.file_manager.save_stl_file(session_id=session_id,stl_bytes=stl_bytes)
+            mesh_size = [im_array.shape[0], im_array.shape[1]]
+            mesh_max = np.max(im_array)
+            
+            if mesh_max == 0:
+                raise ValueError("Image contains no depth information (all pixels are black)")
+            
+            # Scale mesh based on depth information
+            if len(im_array.shape) == 3:
+                # Color image - use first channel
+                scaled_mesh = mesh_size[0] * depth_div_width * im_array[:, :, 0] / mesh_max
+            else:
+                # Grayscale image
+                scaled_mesh = mesh_size[0] * depth_div_width * im_array / mesh_max
+            
+            # Create mesh
+            mesh_shape = mesh.Mesh(
+                np.zeros((mesh_size[0] - 1) * (mesh_size[1] - 1) * 2, dtype=mesh.Mesh.dtype)
+            )
+            
+            # Generate triangles for the mesh
+            for i in range(0, mesh_size[0] - 1):
+                for j in range(0, mesh_size[1] - 1):
+                    mesh_num = i * (mesh_size[1] - 1) + j
+                    
+                    # Apply aspect ratio to i coordinate (height)
+                    i_scaled = i * aspect_ratio
+                    i1_scaled = (i + 1) * aspect_ratio
+                    
+                    # First triangle
+                    mesh_shape.vectors[2 * mesh_num][2] = [i_scaled, j, scaled_mesh[i, j]]
+                    mesh_shape.vectors[2 * mesh_num][1] = [i_scaled, j + 1, scaled_mesh[i, j + 1]]
+                    mesh_shape.vectors[2 * mesh_num][0] = [i1_scaled, j, scaled_mesh[i + 1, j]]
+                    
+                    # Second triangle
+                    mesh_shape.vectors[2 * mesh_num + 1][0] = [i1_scaled, j + 1, scaled_mesh[i + 1, j + 1]]
+                    mesh_shape.vectors[2 * mesh_num + 1][1] = [i_scaled, j + 1, scaled_mesh[i, j + 1]]
+                    mesh_shape.vectors[2 * mesh_num + 1][2] = [i1_scaled, j, scaled_mesh[i + 1, j]]
+            
+            # Generate output filename
+            stl_buffer = io.BytesIO()
+            mesh_shape.save('temp', fh=stl_buffer)  # 保存到内存
+            stl_bytes = stl_buffer.getvalue()
 
+            stl_info = self.file_manager.save_stl_file(session_id, stl_bytes)
             render_b64=self.model_3d_service.render_stl_to_image(stl_info['file_path'])
+            print(f"Render b64 length: {len(render_b64)}")
             render_info=self.file_manager.save_3d_render(session_id=session_id,render_b64=render_b64)
-
-            return AppResponse(
+            print(f"Render info: {render_info}")
+            
+            # base_name = os.path.splitext(os.path.basename(image_path))[0]
+            # output_filename = f"{base_name}_3d.stl"
+            # output_path = os.path.join("static/stls", output_filename)
+            
+            # Save mesh to file
+            # mesh_shape.save(output_path)
+            return Generate3DResponse(
                 success=True,
                 session_id=session_id,
                 data={
                     "stl_file": stl_info,
                     "render_image": render_info,
-                    "proportions": analysis
                 },
                 message="3D model generated successfully."
             )
+            return output_path
+            # silhouette_path=None
+            # for v in range(10,0,-1):
+            #     try:
+            #         silhouette_path=self.file_manager.get_file_path(
+            #             session_id=session_id,
+            #             file_type=f"2d_v{v}")
+            #         break
+            #     except FileNotFoundError:
+            #         continue
+            # if not silhouette_path:
+            #     return AppResponse(
+            #         success=False,
+            #         session_id=session_id,
+            #         error="No 2D silhouette found for 3D generation."
+            #     )
+            
+            # analysis=self.file_manager.db.get_analysis(session_id=session_id)
+            # if not analysis:
+            #     return AppResponse(
+            #         success=False,
+            #         session_id=session_id,
+            #         error="No analysis data found for 3D generation."
+            #     )
+            
+            # stl_bytes=self.model_3d_service.generate_stl_from_2d(silhouette_path=silhouette_path,proportions=analysis)
+            # stl_info=self.file_manager.save_stl_file(session_id=session_id,stl_bytes=stl_bytes)
+
+            # render_b64=self.model_3d_service.render_stl_to_image(stl_info['file_path'])
+            # render_info=self.file_manager.save_3d_render(session_id=session_id,render_b64=render_b64)
+
+            # return AppResponse(
+            #     success=True,
+            #     session_id=session_id,
+            #     data={
+            #         "stl_file": stl_info,
+            #         "render_image": render_info,
+            #         "proportions": analysis
+            #     },
+            #     message="3D model generated successfully."
+            # )
         except Exception as e:
             return AppResponse(success=False,session_id=session_id,error=str(e))
         

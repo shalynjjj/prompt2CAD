@@ -1,13 +1,14 @@
 FROM python:3.9-slim
 
-
-# Prevents Python from writing .pyc files to disk and from buffering stdout and stderr
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# apt-get: install dependencies
-# install -y openscad
-# rm -rf: clean up apt cache to reduce image size
+# 安装系统依赖
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 COPY requirements.txt .

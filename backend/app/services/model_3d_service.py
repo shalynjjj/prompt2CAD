@@ -100,12 +100,6 @@ class Model3DService:
     def generate_3d_render(self, stl_path: str) -> str:
         """Generate render preview, returns base64."""
         try:
-            import matplotlib.pyplot as plt
-            from mpl_toolkits.mplot3d import Axes3D
-            from stl import mesh
-            import io
-            import base64
-            
             your_mesh = mesh.Mesh.from_file(stl_path)
             
             fig = plt.figure(figsize=(10, 10))
